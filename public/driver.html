@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RideGo - Driver</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header>
+        <div class="brand"><span class="brand-dot"></span> RideGo Driver</div>
+        <a href="/" class="badge">Switch role</a>
+      </header>
+
+      <!-- REGISTER -->
+      <section id="regPanel">
+        <div class="card">
+          <h4>Register</h4>
+          <label class="field">
+            <span class="lbl">Driver name</span>
+            <input id="drvName" class="input" placeholder="e.g. Kasun" />
+          </label>
+          <div class="row">
+            <label class="field">
+              <span class="lbl">Vehicle</span>
+              <select id="drvVehicle" class="input">
+                <option>Car</option>
+                <option>Tuk Tuk</option>
+                <option>Bike</option>
+                <option>Mini</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="lbl">Plate</span>
+              <input id="drvPlate" class="input" placeholder="WP CAB-1234" />
+            </label>
+          </div>
+          <button id="regBtn" class="btn">Continue</button>
+          <p class="muted" style="margin-top:10px;">Allow location access for live tracking. If denied, you can drag the blue pin to set your spot.</p>
+        </div>
+      </section>
+
+      <!-- ONLINE PANEL -->
+      <section id="onlinePanel" style="display:none;">
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <h4 style="margin:0;">Status</h4>
+              <span class="badge offline" id="statusBadge">offline</span>
+            </div>
+            <button id="toggleBtn" class="btn success">Go online</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h4>Today</h4>
+          <div class="kv"><span class="k">Trips</span><span class="v" id="statTrips">0</span></div>
+          <div class="kv"><span class="k">Earnings</span><span class="v" id="statEarn">LKR 0</span></div>
+        </div>
+
+        <div class="card" id="incomingCard" style="display:none; border-color: var(--primary);">
+          <h4>Incoming request</h4>
+          <div class="kv"><span class="k">Pickup</span><span class="v" id="reqPickup">-</span></div>
+          <div class="kv"><span class="k">Drop</span><span class="v" id="reqDrop">-</span></div>
+          <div class="kv"><span class="k">Distance</span><span class="v" id="reqDist">-</span></div>
+          <div class="kv"><span class="k">Pickup ETA</span><span class="v" id="reqEta">-</span></div>
+          <div class="kv"><span class="k">Fare</span><span class="v" id="reqFare">-</span></div>
+          <div class="row" style="margin-top:10px;">
+            <button id="rejectBtn" class="btn secondary">Reject</button>
+            <button id="acceptBtn" class="btn">Accept</button>
+          </div>
+        </div>
+
+        <div class="card" id="tripCard" style="display:none;">
+          <h4>Active trip</h4>
+          <div class="kv"><span class="k">Passenger</span><span class="v" id="tripPassenger">-</span></div>
+          <div class="kv"><span class="k">From</span><span class="v" id="tripFrom">-</span></div>
+          <div class="kv"><span class="k">To</span><span class="v" id="tripTo">-</span></div>
+          <div class="kv"><span class="k">State</span><span class="v" id="tripState"><span class="badge online live">heading to pickup</span></span></div>
+          <button id="arrivedBtn" class="btn" style="margin-top:8px;">I have arrived</button>
+          <button id="startBtn" class="btn" style="margin-top:8px; display:none;">Start trip</button>
+          <button id="completeBtn" class="btn success" style="margin-top:8px; display:none;">Complete trip</button>
+        </div>
+      </section>
+    </aside>
+
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/common.js"></script>
+  <script>
+    const socket = io();
+    const map = L.map('map').setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap', maxZoom: 19,
+    }).addTo(map);
+
+    let myLocation = null;
+    let myMarker = null;
+    let pickupMarker = null, dropMarker = null, routeLine = null;
+    let activeRide = null;
+    let stats = { trips: 0, earnings: 0 };
+    let online = false;
+
+    // Mock-driver simulation: when no GPS, allow drag of own pin
+    function setMyLocation(loc, fromUser = true) {
+      myLocation = loc;
+      if (!myMarker) {
+        myMarker = L.marker([loc.lat, loc.lng], {
+          icon: makeIcon('Me', 'me'), draggable: true,
+        }).addTo(map).bindTooltip('Drag to move (sim)');
+        myMarker.on('dragend', (e) => {
+          const ll = e.target.getLatLng();
+          setMyLocation({ lat: ll.lat, lng: ll.lng }, true);
+        });
+      } else {
+        myMarker.setLatLng([loc.lat, loc.lng]);
+      }
+      if (fromUser) socket.emit('driver:location', loc);
+    }
+
+    // Try GPS first; if not, drop pin at default center for dragging
+    if (navigator.geolocation) {
+      navigator.geolocation.watchPosition(
+        (pos) => {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          map.setView([loc.lat, loc.lng], 15);
+          setMyLocation(loc);
+        },
+        () => setMyLocation(DEFAULT_CENTER),
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 8000 },
+      );
+    } else {
+      setMyLocation(DEFAULT_CENTER);
+    }
+
+    // ----- Register -----
+    document.getElementById('regBtn').onclick = () => {
+      const name = document.getElementById('drvName').value.trim() || 'Driver';
+      const vehicle = document.getElementById('drvVehicle').value;
+      const plate = document.getElementById('drvPlate').value.trim() || 'XX-0000';
+      socket.emit('driver:register', { name, vehicle, plate, location: myLocation }, (resp) => {
+        if (!resp?.ok) return toast('Register failed');
+        document.getElementById('regPanel').style.display = 'none';
+        document.getElementById('onlinePanel').style.display = '';
+      });
+    };
+
+    // ----- Online toggle -----
+    const toggleBtn = document.getElementById('toggleBtn');
+    const statusBadge = document.getElementById('statusBadge');
+    toggleBtn.onclick = () => {
+      online = !online;
+      socket.emit('driver:online', online);
+      toggleBtn.textContent = online ? 'Go offline' : 'Go online';
+      toggleBtn.className = online ? 'btn danger' : 'btn success';
+      statusBadge.textContent = online ? 'online' : 'offline';
+      statusBadge.className = online ? 'badge online live' : 'badge offline';
+      if (online && myLocation) socket.emit('driver:location', myLocation);
+    };
+
+    // ----- Incoming request -----
+    let pendingRide = null;
+    socket.on('ride:request', ({ ride, pickupDistanceKm }) => {
+      pendingRide = ride;
+      document.getElementById('reqPickup').textContent = ride.pickupLabel || '(map point)';
+      document.getElementById('reqDrop').textContent = ride.dropLabel || '(map point)';
+      document.getElementById('reqDist').textContent = fmtKm(ride.distanceKm);
+      document.getElementById('reqEta').textContent = fmtKm(pickupDistanceKm);
+      document.getElementById('reqFare').textContent = fmtLKR(ride.estimateFare);
+      document.getElementById('incomingCard').style.display = '';
+      toast('New ride request!');
+    });
+
+    document.getElementById('rejectBtn').onclick = () => {
+      if (!pendingRide) return;
+      socket.emit('driver:reject', { rideId: pendingRide.id });
+      document.getElementById('incomingCard').style.display = 'none';
+      pendingRide = null;
+    };
+
+    document.getElementById('acceptBtn').onclick = () => {
+      if (!pendingRide) return;
+      socket.emit('driver:accept', { rideId: pendingRide.id }, (resp) => {
+        if (!resp?.ok) return toast(resp?.error === 'already_taken' ? 'Already taken' : 'Failed');
+        startTripUI(resp.ride);
+      });
+    };
+
+    function startTripUI(ride) {
+      activeRide = ride;
+      document.getElementById('incomingCard').style.display = 'none';
+      document.getElementById('tripCard').style.display = '';
+      document.getElementById('tripPassenger').textContent = ride.passengerName || 'Passenger';
+      document.getElementById('tripFrom').textContent = ride.pickupLabel || '(pickup)';
+      document.getElementById('tripTo').textContent = ride.dropLabel || '(drop)';
+
+      pickupMarker = L.marker([ride.pickup.lat, ride.pickup.lng], { icon: makeIcon('A','pickup') }).addTo(map);
+      dropMarker = L.marker([ride.drop.lat, ride.drop.lng], { icon: makeIcon('B','drop') }).addTo(map);
+      routeLine = L.polyline(
+        [[myLocation.lat, myLocation.lng], [ride.pickup.lat, ride.pickup.lng], [ride.drop.lat, ride.drop.lng]],
+        { color: '#ffd400', weight: 4, opacity: 0.8 },
+      ).addTo(map);
+      map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+      setTripState('heading to pickup');
+    }
+
+    function setTripState(text) {
+      document.getElementById('tripState').innerHTML = `<span class="badge online live">${text}</span>`;
+    }
+
+    document.getElementById('arrivedBtn').onclick = () => {
+      if (!activeRide) return;
+      socket.emit('driver:arrived', { rideId: activeRide.id });
+      setTripState('arrived at pickup');
+      document.getElementById('arrivedBtn').style.display = 'none';
+      document.getElementById('startBtn').style.display = '';
+    };
+    document.getElementById('startBtn').onclick = () => {
+      if (!activeRide) return;
+      socket.emit('driver:start', { rideId: activeRide.id });
+      setTripState('on trip');
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('completeBtn').style.display = '';
+    };
+    document.getElementById('completeBtn').onclick = () => {
+      if (!activeRide) return;
+      socket.emit('driver:complete', { rideId: activeRide.id });
+      // Local stats
+      stats.trips += 1;
+      stats.earnings += activeRide.estimateFare;
+      document.getElementById('statTrips').textContent = stats.trips;
+      document.getElementById('statEarn').textContent = fmtLKR(stats.earnings);
+      // Cleanup
+      if (pickupMarker) map.removeLayer(pickupMarker);
+      if (dropMarker) map.removeLayer(dropMarker);
+      if (routeLine) map.removeLayer(routeLine);
+      pickupMarker = dropMarker = routeLine = null;
+      document.getElementById('tripCard').style.display = 'none';
+      document.getElementById('arrivedBtn').style.display = '';
+      document.getElementById('startBtn').style.display = 'none';
+      document.getElementById('completeBtn').style.display = 'none';
+      activeRide = null;
+      toast('Trip completed');
+    };
+
+    socket.on('ride:cancelledByPassenger', () => {
+      toast('Passenger cancelled the ride');
+      if (pickupMarker) map.removeLayer(pickupMarker);
+      if (dropMarker) map.removeLayer(dropMarker);
+      if (routeLine) map.removeLayer(routeLine);
+      pickupMarker = dropMarker = routeLine = null;
+      document.getElementById('incomingCard').style.display = 'none';
+      document.getElementById('tripCard').style.display = 'none';
+      activeRide = null;
+      pendingRide = null;
+    });
+
+    socket.on('ride:cancelledForDrivers', ({ rideId }) => {
+      // Hide our incoming card if it was for this ride
+      if (pendingRide && pendingRide.id === rideId) {
+        document.getElementById('incomingCard').style.display = 'none';
+        pendingRide = null;
+      }
+    });
+  </script>
+</body>
+</html>
