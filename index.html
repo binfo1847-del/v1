@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SanGuard — Parent Dashboard</title>
 <meta name="theme-color" content="#1a73e8">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -377,7 +377,15 @@ window.doLogin = function() {
   var pass = document.getElementById('auth-pass').value;
   if (!email || !pass) { showAuthError('Please enter email and password'); return; }
   window._fb.signInWithEmailAndPassword(window._fb.auth, email, pass)
-    .catch(function(e) { showAuthError(e.message); });
+    .then(function() { showAuthError(''); toast('Login successful!'); })
+    .catch(function(e) {
+      var msg = e.code === 'auth/invalid-credential' ? 'Invalid email or password'
+        : e.code === 'auth/user-not-found' ? 'No account found with this email'
+        : e.code === 'auth/too-many-requests' ? 'Too many attempts. Try again later.'
+        : e.code === 'auth/invalid-api-key' ? 'Firebase API key error. Check configuration.'
+        : e.message;
+      showAuthError(msg);
+    });
 }
 
 window.doRegister = function() {
@@ -391,7 +399,14 @@ window.doRegister = function() {
     .then(function(cred) {
       return window._fb.updateProfile(cred.user, { displayName: name });
     })
-    .catch(function(e) { showRegError(e.message); });
+    .then(function() { showRegError(''); toast('Account created! Redirecting...'); })
+    .catch(function(e) {
+      var msg = e.code === 'auth/email-already-in-use' ? 'This email is already registered. Try signing in.'
+        : e.code === 'auth/weak-password' ? 'Password is too weak. Use at least 6 characters.'
+        : e.code === 'auth/invalid-email' ? 'Invalid email address.'
+        : e.message;
+      showRegError(msg);
+    });
 }
 
 window.doLogout = function() {
