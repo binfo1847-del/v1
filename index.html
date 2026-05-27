@@ -320,7 +320,7 @@ a{color:var(--primary);text-decoration:none}
   const auth = getAuth(app);
 
   // Expose to global scope
-  window._fb = { db, auth, ref, set, update, onValue, get, remove, push, serverTimestamp };
+  window._fb = { db, auth, ref, set, update, onValue, get, remove, push, serverTimestamp, updateProfile, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut };
   window._firebaseReady = true;
   document.dispatchEvent(new Event('firebase-ready'));
 </script>
@@ -376,7 +376,7 @@ window.doLogin = function() {
   var email = document.getElementById('auth-email').value.trim();
   var pass = document.getElementById('auth-pass').value;
   if (!email || !pass) { showAuthError('Please enter email and password'); return; }
-  signInWithEmailAndPassword(window._fb.auth, email, pass)
+  window._fb.signInWithEmailAndPassword(window._fb.auth, email, pass)
     .catch(function(e) { showAuthError(e.message); });
 }
 
@@ -387,15 +387,15 @@ window.doRegister = function() {
   if (!name || !email || !pass) { showRegError('Please fill all fields'); return; }
   if (pass.length < 6) { showRegError('Password must be at least 6 characters'); return; }
 
-  createUserWithEmailAndPassword(window._fb.auth, email, pass)
+  window._fb.createUserWithEmailAndPassword(window._fb.auth, email, pass)
     .then(function(cred) {
-      return updateProfile(cred.user, { displayName: name });
+      return window._fb.updateProfile(cred.user, { displayName: name });
     })
     .catch(function(e) { showRegError(e.message); });
 }
 
 window.doLogout = function() {
-  signOut(window._fb.auth);
+  window._fb.signOut(window._fb.auth);
 }
 
 function showAuthError(msg) {
@@ -716,7 +716,7 @@ function renderAlerts() {
 window.saveSettings = function() {
   var name = document.getElementById('settings-name').value.trim();
   if (name) {
-    updateProfile(currentUser, { displayName: name }).then(function() {
+    window._fb.updateProfile(currentUser, { displayName: name }).then(function() {
       document.getElementById('user-name').textContent = name;
       toast('Settings saved');
     });
