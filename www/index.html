@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SanGuard Child</title>
+<meta name="theme-color" content="#2d1b69">
+<style>
+:root{--bg:#0a0a1a;--card:#12122a;--primary:#7c5cff;--success:#00e676;--danger:#ff1744;--warning:#ffab00;--muted:#7070a0;--text:#e8e8ff;--border:rgba(124,92,255,0.15);--radius:14px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center}
+.icon{font-size:80px;margin-bottom:20px}
+h1{font-size:24px;margin-bottom:8px}
+.subtitle{color:var(--muted);margin-bottom:30px;font-size:14px}
+.pair-section{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:30px;width:100%;max-width:400px;margin-bottom:20px}
+.pair-section h3{margin-bottom:16px;font-size:16px}
+input{width:100%;padding:14px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:24px;text-align:center;letter-spacing:8px;text-transform:uppercase;outline:none;font-weight:700}
+input:focus{border-color:var(--primary)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 28px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s;margin-top:16px}
+.btn-primary{background:linear-gradient(135deg,var(--primary),#5a3fd6);color:#fff;width:100%}
+.btn-danger{background:var(--danger);color:#fff;width:100%;margin-top:12px;font-size:20px;padding:18px}
+.status{margin-top:20px;padding:12px 20px;border-radius:10px;font-size:14px}
+.status-connected{background:rgba(0,230,118,0.15);color:var(--success)}
+.status-waiting{background:rgba(255,171,0,0.15);color:var(--warning)}
+.status-locked{background:rgba(255,23,68,0.15);color:var(--danger)}
+.screen-time{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;width:100%;max-width:400px;margin-top:20px}
+.screen-time h3{font-size:14px;color:var(--muted);margin-bottom:8px}
+.time-display{font-size:48px;font-weight:900;color:var(--primary)}
+.time-label{font-size:12px;color:var(--muted);margin-top:4px}
+.sos-btn{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);width:80px;height:80px;border-radius:50%;background:var(--danger);border:4px solid rgba(255,23,68,0.3);color:#fff;font-size:28px;font-weight:900;cursor:pointer;box-shadow:0 0 30px rgba(255,23,68,0.4);transition:all 0.2s;z-index:100}
+.sos-btn:active{transform:translateX(-50%) scale(0.95)}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<!-- PAIR SCREEN -->
+<div id="pairScreen">
+  <div class="icon">🛡️</div>
+  <h1>SanGuard</h1>
+  <p class="subtitle">Child Device — Enter pairing code from parent</p>
+  <div class="pair-section">
+    <h3>🔗 Enter Pairing Code</h3>
+    <input type="text" id="pairInput" maxlength="6" placeholder="XXXXXX" autocomplete="off">
+    <button class="btn btn-primary" onclick="pairDevice()">Connect to Parent</button>
+  </div>
+  <div id="pairStatus"></div>
+</div>
+
+<!-- CONNECTED SCREEN -->
+<div id="connectedScreen" class="hidden">
+  <div class="icon">🛡️</div>
+  <h1>SanGuard Active</h1>
+  <p class="subtitle">Your device is being protected</p>
+
+  <div id="lockOverlay" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(10,10,26,0.95);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center">
+    <div style="font-size:60px;margin-bottom:20px">🔒</div>
+    <h2>Device Locked</h2>
+    <p style="color:var(--muted);margin-top:8px">Your parent has locked this device</p>
+    <p style="color:var(--muted);margin-top:4px;font-size:13px">Contact your parent to unlock</p>
+  </div>
+
+  <div class="screen-time">
+    <h3>📱 Screen Time Today</h3>
+    <div class="time-display" id="screenTimeDisplay">0:00</div>
+    <div class="time-label">of <span id="dailyLimit">120</span> minutes allowed</div>
+  </div>
+
+  <div id="statusBar" class="status status-connected">🟢 Connected to parent</div>
+
+  <button class="sos-btn" onclick="sendSOS()">SOS</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, set, update, onValue, get, push, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA1Jc_WVmTMzOEqRXThTm4oJEXzqhvpsiM",
+  authDomain: "sanchat-611e1.firebaseapp.com",
+  databaseURL: "https://sanchat-611e1-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "sanchat-611e1",
+  storageBucket: "sanchat-611e1.firebasestorage.app",
+  messagingSenderId: "792529827830",
+  appId: "1:792529827830:web:0e5d3c30731fd172b079d7",
+  measurementId: "G-74S2Q6HDV2"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+let parentUid = null;
+let childId = null;
+let screenTimeInterval = null;
+let authReady = false;
+let screenTimeUsed = 0;
+
+// ===== ANONYMOUS AUTH (required for database access) =====
+signInAnonymously(auth).then(() => {
+  authReady = true;
+  console.log('Anonymous auth successful');
+}).catch(err => {
+  console.error('Auth failed:', err);
+  showPairStatus('❌ Auth error: ' + err.message, 'var(--danger)');
+});
+
+// ===== PAIRING =====
+window.pairDevice = async function() {
+  if (!authReady) {
+    showPairStatus('⏳ Connecting to server...', 'var(--warning)');
+    return;
+  }
+  const code = document.getElementById('pairInput').value.trim().toUpperCase();
+  if (!code || code.length !== 6) {
+    showPairStatus('❌ Enter a valid 6-character code', 'var(--danger)');
+    return;
+  }
+
+  showPairStatus('🔍 Looking up code...', 'var(--warning)');
+
+  // Search all users for this pair code
+  try {
+    const sangardRef = ref(db, 'sangard');
+    const snapshot = await get(sangardRef);
+    if (!snapshot.exists()) {
+      showPairStatus('❌ No parent accounts found', 'var(--danger)');
+      return;
+    }
+
+    const allUsers = snapshot.val();
+    let foundParent = null;
+
+    for (const uid of Object.keys(allUsers)) {
+      const user = allUsers[uid];
+      if (user.pairCodes && user.pairCodes[code] && !user.pairCodes[code].used) {
+        foundParent = uid;
+        break;
+      }
+    }
+
+    if (!foundParent) {
+      showPairStatus('❌ Invalid or expired code', 'var(--danger)');
+      return;
+    }
+
+    parentUid = foundParent;
+    childId = 'child_' + Date.now();
+
+    // Register this child
+    const childData = {
+      info: {
+        name: 'Child Device',
+        device: navigator.userAgent,
+        paired_at: Date.now()
+      },
+      status: 'online',
+      location: { lat: 0, lng: 0, timestamp: 0 },
+      screenTime: { dailyLimit: 120, currentUsage: 0, bedtimeStart: '21:00', bedtimeEnd: '07:00' },
+      battery: 100,
+      commands: {}
+    };
+
+    await set(ref(db, 'sangard/' + parentUid + '/children/' + childId), childData);
+
+    // Mark code as used
+    await update(ref(db, 'sangard/' + parentUid + '/pairCodes/' + code), { used: true, childId: childId });
+
+    // Save locally
+    localStorage.setItem('sangard_parent', parentUid);
+    localStorage.setItem('sangard_child', childId);
+
+    // Set online/offline
+    const statusRef = ref(db, 'sangard/' + parentUid + '/children/' + childId + '/status');
+    await set(statusRef, 'online');
+    onDisconnect(statusRef).set('offline');
+
+    showConnected();
+    startLocationTracking();
+    startScreenTimeTracking();
+    listenForCommands();
+
+  } catch (e) {
+    showPairStatus('❌ Error: ' + e.message, 'var(--danger)');
+  }
+};
+
+// ===== INIT =====
+// Wait for auth, then check if already paired
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    authReady = true;
+    console.log('Auth state:', user.uid, 'anonymous:', user.isAnonymous);
+    // Check if already paired
+    parentUid = localStorage.getItem('sangard_parent');
+    childId = localStorage.getItem('sangard_child');
+    if (parentUid && childId) {
+      showConnected();
+      startLocationTracking();
+      startScreenTimeTracking();
+      listenForCommands();
+      // Re-set online status
+      const statusRef = ref(db, 'sangard/' + parentUid + '/children/' + childId + '/status');
+      set(statusRef, 'online');
+      onDisconnect(statusRef).set('offline');
+    }
+  }
+});
+
+function showConnected() {
+  document.getElementById('pairScreen').classList.add('hidden');
+  document.getElementById('connectedScreen').classList.remove('hidden');
+}
+
+function showPairStatus(msg, color) {
+  const el = document.getElementById('pairStatus');
+  el.style.color = color;
+  el.textContent = msg;
+}
+
+// ===== LOCATION TRACKING =====
+function startLocationTracking() {
+  if (!navigator.geolocation) return;
+
+  navigator.geolocation.watchPosition(
+    pos => {
+      if (!parentUid || !childId) return;
+      update(ref(db, 'sangard/' + parentUid + '/children/' + childId + '/location'), {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        timestamp: Date.now()
+      });
+    },
+    err => console.warn('Location error:', err),
+    { enableHighAccuracy: true, maximumAge: 30000, timeout: 60000 }
+  );
+
+  // Update battery
+  if (navigator.getBattery) {
+    navigator.getBattery().then(battery => {
+      function updateBattery() {
+        if (parentUid && childId) {
+          update(ref(db, 'sangard/' + parentUid + '/children/' + childId), {
+            battery: Math.round(battery.level * 100)
+          });
+        }
+      }
+      updateBattery();
+      battery.addEventListener('levelchange', updateBattery);
+    });
+  }
+}
+
+// ===== SCREEN TIME =====
+function startScreenTimeTracking() {
+  // Load today's usage
+  const today = new Date().toISOString().split('T')[0];
+  const usageRef = ref(db, 'sangard/' + parentUid + '/children/' + childId + '/screenTime');
+
+  onValue(usageRef, snap => {
+    const st = snap.val() || {};
+    document.getElementById('dailyLimit').textContent = st.dailyLimit || 120;
+    screenTimeUsed = st.currentUsage || 0;
+    updateScreenTimeDisplay();
+  });
+
+  // Increment every minute
+  screenTimeInterval = setInterval(() => {
+    screenTimeUsed++;
+    updateScreenTimeDisplay();
+    if (parentUid && childId) {
+      update(ref(db, 'sangard/' + parentUid + '/children/' + childId + '/screenTime'), {
+        currentUsage: screenTimeUsed
+      });
+    }
+  }, 60000);
+}
+
+function updateScreenTimeDisplay() {
+  const h = Math.floor(screenTimeUsed / 60);
+  const m = screenTimeUsed % 60;
+  document.getElementById('screenTimeDisplay').textContent = h + ':' + String(m).padStart(2, '0');
+}
+
+// ===== COMMANDS =====
+function listenForCommands() {
+  if (!parentUid || !childId) return;
+
+  const commandsRef = ref(db, 'sangard/' + parentUid + '/children/' + childId + '  ' + childId + '/commands');
+  onValue(commandsRef, snap => {
+    const cmds = snap.val() || {};
+    Object.keys(cmds).forEach(key => {
+      const cmd = cmds[key];
+      if (cmd.status === 'pending') {
+        executeCommand(cmd.type, key);
+        // Mark as executed
+        update(ref(db, 'sangard/' + parentUid + '/children/' + childId + '/commands/' + key), {
+          status: 'executed',
+          executedAt: Date.now()
+        });
+      }
+    });
+  });
+}
+
+function executeCommand(type, cmdKey) {
+  switch(type) {
+    case 'lock':
+      document.getElementById('lockOverlay').classList.remove('hidden');
+      document.getElementById('lockOverlay').style.display = 'flex';
+      break;
+    case 'unlock':
+      document.getElementById('lockOverlay').classList.add('hidden');
+      document.getElementById('lockOverlay').style.display = 'none';
+      break;
+    case 'ring':
+      // Vibrate pattern
+      if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
+      alert('🔔 Your parent is ringing your device!');
+      break;
+    case 'locate':
+      // Already tracking location
+      break;
+  }
+}
+
+// ===== SOS =====
+window.sendSOS = function() {
+  if (!parentUid || !childId) return;
+
+  navigator.geolocation.getCurrentPosition(pos => {
+    push(ref(db, 'sangard/' + parentUid + '/alerts'), {
+      type: 'sos',
+      childId: childId,
+      message: '🆘 SOS EMERGENCY! Child pressed SOS button.',
+      location: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+      timestamp: Date.now()
+    });
+
+    // Also update child status
+    update(ref(db, 'sangard/' + parentUid + '/children/' + childId), {
+      sosActive: true,
+      sosAt: Date.now()
+    });
+
+    alert('🆘 SOS sent to your parent!');
+  }, err => {
+    push(ref(db, 'sangard/' + parentUid + '/alerts'), {
+      type: 'sos',
+      childId: childId,
+      message: '🆘 SOS EMERGENCY! (location unavailable)',
+      timestamp: Date.now()
+    });
+    alert('🆘 SOS sent to your parent!');
+  });
+};
+</script>
+</body>
+</html>
