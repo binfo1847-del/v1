@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SanGuard — Parent Dashboard</title>
+<meta name="theme-color" content="#1a73e8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f0f2f5;--card:#fff;--primary:#1a73e8;--primary-dark:#1557b0;
+  --danger:#ea4335;--success:#34a853;--warning:#fbbc04;--muted:#5f6368;
+  --text:#202124;--border:#dadce0;--shadow:0 1px 3px rgba(0,0,0,.12);
+  --radius:12px;
+}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--primary);text-decoration:none}
+
+/* Auth Screen */
+.auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.auth-box{background:var(--card);border-radius:var(--radius);padding:40px;max-width:420px;width:100%;box-shadow:var(--shadow)}
+.auth-box h1{text-align:center;font-size:28px;margin-bottom:8px}
+.auth-box .logo{text-align:center;font-size:48px;margin-bottom:16px}
+.auth-box p.subtitle{text-align:center;color:var(--muted);margin-bottom:32px}
+
+/* Form */
+.fg{margin-bottom:16px}
+.fg label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--muted)}
+.fg input,.fg select{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--card);color:var(--text);outline:none;transition:border .2s}
+.fg input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(26,115,232,.15)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 24px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{background:var(--bg)}
+.btn-full{width:100%}
+.btn-sm{padding:8px 16px;font-size:13px}
+
+/* Dashboard */
+.dash{display:none}
+.topbar{background:var(--card);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.topbar h2{font-size:18px;display:flex;align-items:center;gap:8px}
+.topbar .user-info{display:flex;align-items:center;gap:12px}
+.topbar .user-info span{color:var(--muted);font-size:13px}
+.topbar .user-info .avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+
+.tabs{display:flex;gap:4px;padding:12px 24px;background:var(--card);border-bottom:1px solid var(--border);overflow-x:auto}
+.tab{padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .2s;white-space:nowrap}
+.tab.active{background:var(--primary);color:#fff}
+.tab:hover:not(.active){background:var(--bg)}
+
+.content{padding:20px 24px;max-width:1200px;margin:0 auto}
+
+/* Cards */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:16px}
+.card h3{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+/* Child Cards */
+.child-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.child-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;cursor:pointer;transition:transform .2s}
+.child-card:hover{transform:translateY(-2px)}
+.child-card .child-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.child-card .child-avatar{width:48px;height:48px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700}
+.child-card .child-name{font-size:16px;font-weight:700}
+.child-card .child-device{font-size:12px;color:var(--muted)}
+.child-card .child-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.child-card .stat{background:var(--bg);border-radius:8px;padding:10px;text-align:center}
+.child-card .stat .stat-val{font-size:18px;font-weight:700}
+.child-card .stat .stat-label{font-size:11px;color:var(--muted)}
+.online-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-left:6px}
+.online-dot.on{background:var(--success)}
+.online-dot.off{background:var(--muted)}
+
+/* Map */
+#map{height:400px;border-radius:var(--radius);margin-bottom:16px}
+
+/* Screen Time */
+.time-bar{height:24px;background:var(--bg);border-radius:12px;overflow:hidden;margin:8px 0}
+.time-bar-fill{height:100%;border-radius:12px;transition:width .3s}
+.time-bar-fill.ok{background:var(--success)}
+.time-bar-fill.warn{background:var(--warning)}
+.time-bar-fill.over{background:var(--danger)}
+
+/* Alerts */
+.alert-item{display:flex;gap:12px;padding:12px;border-bottom:1px solid var(--border)}
+.alert-item:last-child{border-bottom:none}
+.alert-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.alert-icon.sos{background:rgba(234,67,53,.1);color:var(--danger)}
+.alert-icon.geofence{background:rgba(251,188,4,.1);color:var(--warning)}
+
+/* Pairing Code */
+.pairing-code{font-size:48px;font-weight:800;letter-spacing:8px;text-align:center;color:var(--primary);padding:20px;background:var(--bg);border-radius:var(--radius);margin:16px 0;font-family:monospace}
+
+/* Actions */
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border-radius:var(--radius);padding:24px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto}
+.modal h3{margin-bottom:16px}
+.modal .mftr{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;z-index:300;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+
+/* Responsive */
+@media(max-width:768px){
+  .topbar{padding:12px 16px}
+  .content{padding:16px}
+  .child-grid{grid-template-columns:1fr}
+  .tabs{padding:12px 16px}
+  .pairing-code{font-size:36px;letter-spacing:6px}
+}
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-box">
+    <div class="logo">🛡️</div>
+    <h1>SanGuard</h1>
+    <p class="subtitle">Parent Dashboard</p>
+
+    <div id="login-form">
+      <div class="fg">
+        <label>Email</label>
+        <input type="email" id="auth-email" placeholder="parent@email.com">
+      </div>
+      <div class="fg">
+        <label>Password</label>
+        <input type="password" id="auth-pass" placeholder="Your password">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="doLogin()">Sign In</button>
+      <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--muted)">
+        Don't have an account? <a href="#" onclick="toggleAuthMode()">Register</a>
+      </p>
+      <div id="auth-error" style="color:var(--danger);font-size:13px;text-align:center;margin-top:12px"></div>
+    </div>
+
+    <div id="register-form" style="display:none">
+      <div class="fg">
+        <label>Your Name</label>
+        <input type="text" id="reg-name" placeholder="Your name">
+      </div>
+      <div class="fg">
+        <label>Email</label>
+        <input type="email" id="reg-email" placeholder="parent@email.com">
+      </div>
+      <div class="fg">
+        <label>Password</label>
+        <input type="password" id="reg-pass" placeholder="Min 6 characters">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="doRegister()">Create Account</button>
+      <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--muted)">
+        Already have an account? <a href="#" onclick="toggleAuthMode()">Sign In</a>
+      </p>
+      <div id="reg-error" style="color:var(--danger);font-size:13px;text-align:center;margin-top:12px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="dash">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <h2>🛡️ SanGuard</h2>
+    <div class="user-info">
+      <span id="user-name"></span>
+      <div class="avatar" id="user-avatar">P</div>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="children" onclick="switchTab('children')">👶 Children</div>
+    <div class="tab" data-tab="map" onclick="switchTab('map')">🗺️ Map</div>
+    <div class="tab" data-tab="screentime" onclick="switchTab('screentime')">⏰ Screen Time</div>
+    <div class="tab" data-tab="alerts" onclick="switchTab('alerts')">🔔 Alerts</div>
+    <div class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ Settings</div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <!-- Children Tab -->
+    <div id="tab-children" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2>My Children</h2>
+        <button class="btn btn-primary btn-sm" onclick="showAddChild()">+ Add Child</button>
+      </div>
+      <div id="children-grid" class="child-grid">
+        <div class="card" style="text-align:center;padding:40px;color:var(--muted)">
+          <div style="font-size:48px;margin-bottom:12px">👶</div>
+          <p>No children added yet</p>
+          <p style="font-size:13px;margin-top:8px">Click "Add Child" to get started</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map Tab -->
+    <div id="tab-map" class="tab-content" style="display:none">
+      <div class="card">
+        <h3>🗺️ Live Location</h3>
+        <div id="map"></div>
+        <div id="map-info" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
+      </div>
+    </div>
+
+    <!-- Screen Time Tab -->
+    <div id="tab-screentime" class="tab-content" style="display:none">
+      <div class="card">
+        <h3>⏰ Screen Time Controls</h3>
+        <div id="screentime-content">
+          <p style="color:var(--muted)">Select a child from the Children tab first</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts Tab -->
+    <div id="tab-alerts" class="tab-content" style="display:none">
+      <div class="card">
+        <h3>🔔 Alerts & Notifications</h3>
+        <div id="alerts-list">
+          <p style="color:var(--muted);text-align:center;padding:20px">No alerts yet</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="tab-settings" class="tab-content" style="display:none">
+      <div class="card">
+        <h3>⚙️ Account Settings</h3>
+        <div class="fg">
+          <label>Display Name</label>
+          <input type="text" id="settings-name">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save</button>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h3>🔗 Firebase Rules</h3>
+        <pre style="background:var(--bg);padding:12px;border-radius:8px;font-size:12px;overflow-x:auto">{
+  "rules": {
+    "sanGuard": {
+      "$parentId": {
+        ".read": "auth !== null && auth.uid === $parentId",
+        ".write": "auth !== null && auth.uid === $parentId"
+      }
+    }
+  }
+}</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CHILD MODAL -->
+<div id="modal-add-child" class="modal-overlay">
+  <div class="modal">
+    <h3>👶 Add Child Device</h3>
+    <div class="fg">
+      <label>Child Name</label>
+      <input type="text" id="child-name" placeholder="e.g., Daughter's Phone">
+    </div>
+    <div class="fg">
+      <label>Device Model</label>
+      <input type="text" id="child-device" placeholder="e.g., Samsung Galaxy A54">
+    </div>
+    <div id="pairing-section" style="display:none">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Enter this code in the child device app:</p>
+      <div class="pairing-code" id="pairing-code"></div>
+      <p style="font-size:12px;color:var(--muted);text-align:center">Code expires in 5 minutes</p>
+    </div>
+    <div class="mftr">
+      <button class="btn btn-outline" onclick="closeModal('modal-add-child')">Cancel</button>
+      <button class="btn btn-primary" id="btn-generate-code" onclick="generatePairingCode()">Generate Code</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHILD DETAIL MODAL -->
+<div id="modal-child-detail" class="modal-overlay">
+  <div class="modal" style="max-width:600px">
+    <h3 id="detail-child-name">Child Name</h3>
+    <div id="detail-content"></div>
+    <div class="mftr">
+      <button class="btn btn-outline" onclick="closeModal('modal-child-detail')">Close</button>
+      <button class="btn btn-danger btn-sm" onclick="removeChild()">Remove Child</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<!-- FIREBASE -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getDatabase, ref, set, update, onValue, get, remove, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA1Jc_WVmTMzOEqRXThTm4oJEXzqhvpsiM",
+    authDomain: "sanchat-611e1.firebaseapp.com",
+    databaseURL: "https://sanchat-611e1-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "sanchat-611e1",
+    storageBucket: "sanchat-611e1.firebasestorage.app",
+    messagingSenderId: "792529827830",
+    appId: "1:792529827830:web:0e5d3c30731fd172b079d7"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const auth = getAuth(app);
+
+  // Expose to global scope
+  window._fb = { db, auth, ref, set, update, onValue, get, remove, push, serverTimestamp };
+  window._firebaseReady = true;
+  document.dispatchEvent(new Event('firebase-ready'));
+</script>
+
+<!-- LEAFLET -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- MAIN APP -->
+<script>
+var currentUser = null;
+var childrenData = {};
+var selectedChildId = null;
+var map = null;
+var markers = {};
+
+// Wait for Firebase
+document.addEventListener('firebase-ready', initApp);
+
+function initApp() {
+  window._fb.auth.onAuthStateChanged(function(user) {
+    if (user) {
+      currentUser = user;
+      showDashboard();
+    } else {
+      currentUser = null;
+      showAuth();
+    }
+  });
+}
+
+// ──── AUTH ────
+function showAuth() {
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+}
+
+function showDashboard() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('user-name').textContent = currentUser.displayName || currentUser.email;
+  document.getElementById('user-avatar').textContent = (currentUser.displayName || currentUser.email)[0].toUpperCase();
+  listenChildren();
+}
+
+function toggleAuthMode() {
+  var login = document.getElementById('login-form');
+  var reg = document.getElementById('register-form');
+  login.style.display = login.style.display === 'none' ? 'block' : 'none';
+  reg.style.display = reg.style.display === 'none' ? 'block' : 'none';
+}
+
+window.doLogin = function() {
+  var email = document.getElementById('auth-email').value.trim();
+  var pass = document.getElementById('auth-pass').value;
+  if (!email || !pass) { showAuthError('Please enter email and password'); return; }
+  signInWithEmailAndPassword(window._fb.auth, email, pass)
+    .catch(function(e) { showAuthError(e.message); });
+}
+
+window.doRegister = function() {
+  var name = document.getElementById('reg-name').value.trim();
+  var email = document.getElementById('reg-email').value.trim();
+  var pass = document.getElementById('reg-pass').value;
+  if (!name || !email || !pass) { showRegError('Please fill all fields'); return; }
+  if (pass.length < 6) { showRegError('Password must be at least 6 characters'); return; }
+
+  createUserWithEmailAndPassword(window._fb.auth, email, pass)
+    .then(function(cred) {
+      return updateProfile(cred.user, { displayName: name });
+    })
+    .catch(function(e) { showRegError(e.message); });
+}
+
+window.doLogout = function() {
+  signOut(window._fb.auth);
+}
+
+function showAuthError(msg) {
+  document.getElementById('auth-error').textContent = msg;
+}
+
+function showRegError(msg) {
+  document.getElementById('reg-error').textContent = msg;
+}
+
+// ──── TABS ────
+window.switchTab = function(tabName) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.tab-content').forEach(function(c) { c.style.display = 'none'; });
+  document.querySelector('[data-tab="'+tabName+'"]').classList.add('active');
+  document.getElementById('tab-'+tabName).style.display = 'block';
+
+  if (tabName === 'map' && !map) {
+    setTimeout(initMap, 100);
+  }
+}
+
+// ──── CHILDREN ────
+function listenChildren() {
+  if (!currentUser) return;
+  var childrenRef = window._fb.ref(window._fb.db, 'sanGuard/' + currentUser.uid + '/children');
+  window._fb.onValue(childrenRef, function(snap) {
+    childrenData = snap.val() || {};
+    renderChildren();
+    updateMap();
+    renderAlerts();
+    if (selectedChildId && childrenData[selectedChildId]) {
+      renderScreenTime(selectedChildId);
+    }
+  });
+}
+
+function renderChildren() {
+  var grid = document.getElementById('children-grid');
+  var ids = Object.keys(childrenData);
+
+  if (ids.length === 0) {
+    grid.innerHTML = '<div class="card" style="text-align:center;padding:40px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👶</div><p>No children added yet</p><p style="font-size:13px;margin-top:8px">Click "Add Child" to get started</p></div>';
+    return;
+  }
+
+  grid.innerHTML = ids.map(function(id) {
+    var child = childrenData[id];
+    var info = child.info || {};
+    var loc = child.location || {};
+    var st = child.screenTime || {};
+    var isOnline = loc.timestamp && (Date.now() - loc.timestamp < 5 * 60 * 1000);
+    var battery = loc.battery || 0;
+    var used = st.used_today_min || 0;
+    var limit = st.daily_limit_min || 120;
+    var pct = Math.min(100, Math.round(used / limit * 100));
+    var timeClass = pct < 70 ? 'ok' : pct < 100 ? 'warn' : 'over';
+    var lastSeen = loc.timestamp ? timeAgo(loc.timestamp) : 'Never';
+
+    return '<div class="child-card" onclick="showChildDetail(\''+id+'\')">' +
+      '<div class="child-header">' +
+        '<div class="child-avatar">' + (info.name || '?')[0].toUpperCase() + '</div>' +
+        '<div>' +
+          '<div class="child-name">' + esc(info.name || 'Unknown') + '<span class="online-dot ' + (isOnline ? 'on' : 'off') + '"></span></div>' +
+          '<div class="child-device">' + esc(info.device || 'Unknown device') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="child-stats">' +
+        '<div class="stat"><div class="stat-val">' + battery + '%</div><div class="stat-label">Battery</div></div>' +
+        '<div class="stat"><div class="stat-val">' + lastSeen + '</div><div class="stat-label">Last Seen</div></div>' +
+        '<div class="stat"><div class="stat-val">' + used + '/' + limit + 'm</div><div class="stat-label">Screen Time</div></div>' +
+        '<div class="stat"><div class="stat-val">' + pct + '%</div><div class="stat-label">Used</div></div>' +
+      '</div>' +
+      '<div class="time-bar"><div class="time-bar-fill ' + timeClass + '" style="width:' + pct + '%"></div></div>' +
+    '</div>';
+  }).join('');
+}
+
+// ──── ADD CHILD ────
+window.showAddChild = function() {
+  document.getElementById('child-name').value = '';
+  document.getElementById('child-device').value = '';
+  document.getElementById('pairing-section').style.display = 'none';
+  document.getElementById('btn-generate-code').style.display = 'inline-flex';
+  showModal('modal-add-child');
+}
+
+window.generatePairingCode = function() {
+  var name = document.getElementById('child-name').value.trim();
+  var device = document.getElementById('child-device').value.trim();
+  if (!name) { toast('Please enter child name'); return; }
+
+  var code = String(Math.floor(100000 + Math.random() * 900000));
+  var childRef = window._fb.push(window._fb.ref(window._fb.db, 'sanGuard/' + currentUser.uid + '/children'));
+  var childId = childRef.key;
+
+  window._fb.set(childRef, {
+    info: {
+      name: name,
+      device: device || 'Unknown',
+      paired_at: null,
+      pairing_code: code,
+      pairing_expires: Date.now() + 5 * 60 * 1000
+    },
+    location: { lat: 0, lng: 0, timestamp: 0, battery: 0 },
+    screenTime: { daily_limit_min: 120, used_today_min: 0, locked: false },
+    commands: { lock: false, ring: false, updated_at: 0 },
+    alerts: {}
+  }).then(function() {
+    document.getElementById('pairing-code').textContent = code;
+    document.getElementById('pairing-section').style.display = 'block';
+    document.getElementById('btn-generate-code').style.display = 'none';
+    toast('Pairing code generated!');
+  }).catch(function(e) {
+    toast('Error: ' + e.message);
+  });
+}
+
+// ──── CHILD DETAIL ────
+window.showChildDetail = function(childId) {
+  selectedChildId = childId;
+  var child = childrenData[childId];
+  if (!child) return;
+
+  var info = child.info || {};
+  var loc = child.location || {};
+  var st = child.screenTime || {};
+  var cmds = child.commands || {};
+
+  document.getElementById('detail-child-name').textContent = info.name || 'Child';
+
+  var isOnline = loc.timestamp && (Date.now() - loc.timestamp < 5 * 60 * 1000);
+  var html = '<div style="margin-bottom:16px">' +
+    '<p><strong>Device:</strong> ' + esc(info.device || 'Unknown') + '</p>' +
+    '<p><strong>Status:</strong> <span style="color:' + (isOnline ? 'var(--success)' : 'var(--muted)') + '">' + (isOnline ? 'Online' : 'Offline') + '</span></p>' +
+    '<p><strong>Battery:</strong> ' + (loc.battery || 0) + '%</p>' +
+    '<p><strong>Last Location:</strong> ' + (loc.lat ? loc.lat.toFixed(4) + ', ' + loc.lng.toFixed(4) : 'Not available') + '</p>' +
+    '<p><strong>Last Updated:</strong> ' + (loc.timestamp ? new Date(loc.timestamp).toLocaleString() : 'Never') + '</p>' +
+  '</div>';
+
+  html += '<div class="actions">' +
+    '<button class="btn btn-primary btn-sm" onclick="sendCommand(\'' + childId + '\', \'ring\')">🔔 Ring</button>' +
+    '<button class="btn btn-danger btn-sm" onclick="sendCommand(\'' + childId + '\', \'lock\')">🔒 Lock</button>' +
+    '<button class="btn btn-outline btn-sm" onclick="sendCommand(\'' + childId + '\', \'unlock\')">🔓 Unlock</button>' +
+  '</div>';
+
+  html += '<div style="margin-top:16px">' +
+    '<h4>Screen Time</h4>' +
+    '<div class="fg"><label>Daily Limit (minutes)</label>' +
+    '<input type="number" id="detail-limit" value="' + (st.daily_limit_min || 120) + '" min="0" max="1440"></div>' +
+    '<button class="btn btn-primary btn-sm" onclick="updateScreenTime(\'' + childId + '\')">Update Limit</button>' +
+  '</div>';
+
+  document.getElementById('detail-content').innerHTML = html;
+  showModal('modal-child-detail');
+}
+
+window.sendCommand = function(childId, cmd) {
+  var cmdRef = window._fb.ref(window._fb.db, 'sanGuard/' + currentUser.uid + '/children/' + childId + '/commands');
+  var updates = { updated_at: Date.now() };
+  updates[cmd] = true;
+  if (cmd === 'unlock') updates.lock = false;
+
+  window._fb.update(cmdRef, updates).then(function() {
+    toast('Command sent: ' + cmd);
+  });
+}
+
+window.updateScreenTime = function(childId) {
+  var limit = parseInt(document.getElementById('detail-limit').value) || 120;
+  var stRef = window._fb.ref(window._fb.db, 'sanGuard/' + currentUser.uid + '/children/' + childId + '/screenTime');
+  window._fb.update(stRef, { daily_limit_min: limit }).then(function() {
+    toast('Screen time limit updated');
+  });
+}
+
+window.removeChild = function() {
+  if (!selectedChildId) return;
+  if (!confirm('Are you sure you want to remove this child?')) return;
+
+  var childRef = window._fb.ref(window._fb.db, 'sanGuard/' + currentUser.uid + '/children/' + selectedChildId);
+  window._fb.remove(childRef).then(function() {
+    closeModal('modal-child-detail');
+    toast('Child removed');
+  });
+}
+
+// ──── MAP ────
+function initMap() {
+  map = L.map('map').setView([7.8731, 80.7718], 7); // Sri Lanka center
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+  updateMap();
+}
+
+function updateMap() {
+  if (!map) return;
+
+  // Clear old markers
+  Object.values(markers).forEach(function(m) { map.removeLayer(m); });
+  markers = {};
+
+  var bounds = [];
+  var ids = Object.keys(childrenData);
+
+  ids.forEach(function(id) {
+    var child = childrenData[id];
+    var loc = child.location || {};
+    var info = child.info || {};
+
+    if (loc.lat && loc.lng) {
+      var isOnline = loc.timestamp && (Date.now() - loc.timestamp < 5 * 60 * 1000);
+      var icon = L.divIcon({
+        className: 'custom-marker',
+        html: '<div style="background:' + (isOnline ? 'var(--primary)' : 'var(--muted)') + ';color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">' + (info.name || '?')[0].toUpperCase() + '</div>',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+
+      markers[id] = L.marker([loc.lat, loc.lng], { icon: icon })
+        .addTo(map)
+        .bindPopup('<b>' + esc(info.name || 'Unknown') + '</b><br>Battery: ' + (loc.battery || 0) + '%<br>' + timeAgo(loc.timestamp));
+
+      bounds.push([loc.lat, loc.lng]);
+    }
+  });
+
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [50, 50] });
+    document.getElementById('map-info').textContent = bounds.length + ' device(s) located';
+  } else {
+    document.getElementById('map-info').textContent = 'No devices with location data';
+  }
+}
+
+// ──── SCREEN TIME ────
+function renderScreenTime(childId) {
+  var child = childrenData[childId];
+  if (!child) return;
+
+  var st = child.screenTime || {};
+  var info = child.info || {};
+  var used = st.used_today_min || 0;
+  var limit = st.daily_limit_min || 120;
+  var pct = Math.min(100, Math.round(used / limit * 100));
+  var timeClass = pct < 70 ? 'ok' : pct < 100 ? 'warn' : 'over';
+
+  document.getElementById('screentime-content').innerHTML =
+    '<h4 style="margin-bottom:12px">' + esc(info.name || 'Child') + '</h4>' +
+    '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+      '<span>Used: ' + used + ' min</span>' +
+      '<span>Limit: ' + limit + ' min</span>' +
+    '</div>' +
+    '<div class="time-bar" style="height:32px"><div class="time-bar-fill ' + timeClass + '" style="width:' + pct + '%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px">' + pct + '%</div></div>' +
+    '<div style="margin-top:16px">' +
+      '<div class="fg"><label>Daily Limit (minutes)</label>' +
+      '<input type="number" id="st-limit" value="' + limit + '" min="0" max="1440"></div>' +
+      '<button class="btn btn-primary btn-sm" onclick="saveScreenTime(\'' + childId + '\')">Save</button>' +
+      '<button class="btn ' + (st.locked ? 'btn-danger' : 'btn-outline') + ' btn-sm" style="margin-left:8px" onclick="toggleLock(\'' + childId + '\')">' +
+        (st.locked ? '🔒 Locked' : '🔓 Lock Now') + '</button>' +
+    '</div>';
+}
+
+window.saveScreenTime = function(childId) {
+  var limit = parseInt(document.getElementById('st-limit').value) || 120;
+  var stRef = window._fb.ref(window._fb.db, 'sanGuard/' + currentUser.uid + '/children/' + childId + '/screenTime');
+  window._fb.update(stRef, { daily_limit_min: limit }).then(function() {
+    toast('Screen time saved');
+  });
+}
+
+window.toggleLock = function(childId) {
+  var child = childrenData[childId];
+  var locked = !(child.screenTime && child.screenTime.locked);
+  var stRef = window._fb.ref(window._fb.db, 'sanGuard/' + currentUser.uid + '/children/' + childId + '/screenTime');
+  window._fb.update(stRef, { locked: locked }).then(function() {
+    toast(locked ? 'Device locked' : 'Device unlocked');
+    renderScreenTime(childId);
+  });
+}
+
+// ──── ALERTS ────
+function renderAlerts() {
+  var list = document.getElementById('alerts-list');
+  var allAlerts = [];
+
+  Object.keys(childrenData).forEach(function(id) {
+    var child = childrenData[id];
+    var alerts = child.alerts || {};
+    Object.keys(alerts).forEach(function(aid) {
+      allAlerts.push(Object.assign({ childId: id, childName: (child.info || {}).name || 'Unknown', id: aid }, alerts[aid]));
+    });
+  });
+
+  allAlerts.sort(function(a, b) { return (b.timestamp || 0) - (a.timestamp || 0); });
+
+  if (allAlerts.length === 0) {
+    list.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">No alerts yet</p>';
+    return;
+  }
+
+  list.innerHTML = allAlerts.map(function(a) {
+    var iconClass = a.type === 'sos' ? 'sos' : 'geofence';
+    var icon = a.type === 'sos' ? '🆘' : '📍';
+    return '<div class="alert-item">' +
+      '<div class="alert-icon ' + iconClass + '">' + icon + '</div>' +
+      '<div>' +
+        '<div style="font-weight:600">' + esc(a.childName) + ' — ' + esc(a.type || 'Alert') + '</div>' +
+        '<div style="font-size:13px;color:var(--muted)">' + esc(a.message || '') + '</div>' +
+        '<div style="font-size:12px;color:var(--muted)">' + (a.timestamp ? new Date(a.timestamp).toLocaleString() : '') + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ──── SETTINGS ────
+window.saveSettings = function() {
+  var name = document.getElementById('settings-name').value.trim();
+  if (name) {
+    updateProfile(currentUser, { displayName: name }).then(function() {
+      document.getElementById('user-name').textContent = name;
+      toast('Settings saved');
+    });
+  }
+}
+
+// ──── HELPERS ────
+function esc(s) { return String(s).replace(/[&<>"']/g, function(m) { return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]; }); }
+
+function timeAgo(ts) {
+  if (!ts) return 'Never';
+  var diff = Date.now() - ts;
+  if (diff < 60000) return 'Just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  return Math.floor(diff / 86400000) + 'd ago';
+}
+
+function showModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 3000);
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(function(m) {
+  m.addEventListener('click', function(e) {
+    if (e.target === m) m.classList.remove('show');
+  });
+});
+</script>
+
+</body>
+</html>
